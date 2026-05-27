@@ -6,19 +6,21 @@ h5exporters = false  # true if plugin contains custom h5 file exporters
 scanners = false  # true if plugin contains custom scan layout (daq_scan extensions)
 
 [urls]
-package-url = 'https://github.com/PABausson/pymodaq_plugins_eurotherm'
-
+#package-url = 'https://github.com/PABausson/pymodaq_plugins_eurotherm'
+package-url = 'https://github.com/jayjayemr/pymodaq_plugins_eurotherm'
 [project]
 name = "pymodaq_plugins_eurotherm"
 description = 'Set of PyMoDAQ plugins for Eurotherm process controllers'
 dependencies = [
     "pymodaq>=5.0.0",
     "minimalmodbus>=2.1.1",
-    "pyserial>=3.5"
+    "pyserial>=3.5",
+    "pymodbus>=3.13.0"
 ]
 
 authors = [
     {name = "BAUSSON Pierre-Anne", email = "bausson.pierreanne@gmail.com"},
+    {name = "POUILLOUX Jérôme", email = "jerome.pouilloux@gmail.com"}
 ]
 # maintainers = [
     #{name = "Name Surname", email = "myname@test.fr"},

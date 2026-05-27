@@ -26,7 +26,7 @@ Authors
 =======
 
 * Pierre-Anne Bausson (bausson.pierreanne@gmail.com)
-.. * Other author (myotheremail@xxx.org)
+* Jérôme Pouilloux (jerome.pouilloux@gmail.com)
 
 .. if needed use this field
 
@@ -48,12 +48,13 @@ Actuators
 +++++++++
 
 * **Eurotherm_3500**: Control of Eurotherm 3500 process controllers
-.. * **xxx**: control of xxx actuators
+* **Eurotherm_nanodac**: Control of Nanodac process controllers
 
 .. Viewer0D
 .. ++++++++
 
 .. * **Eurotherm_3500_viewer**: Read-only version of Eurotherm 3500 process controllers
+.. * **Eurotherm_nanodac_viewer**: Read-only version of Nanodac process controllers
 
 .. Viewer1D
 .. ++++++++
