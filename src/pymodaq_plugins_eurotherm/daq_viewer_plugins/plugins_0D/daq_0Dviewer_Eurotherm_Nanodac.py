@@ -39,10 +39,8 @@ class DAQ_0DViewer_Eurotherm_Nanodac(DAQ_Viewer_base):
 
     """
     params = comon_parameters+[
-        {'title':'Nanodac IP', 'name': 'Nanodac IP', 'type': 'str','value':'140.77.101.201'},
-        {'title': 'Measurement unit', 'name': 'measurement_unit', 'type': 'list',
-         'limits': Nanodac.AVAILABLE_MEASUREMENT_UNITS,
-         'value': Nanodac.DEFAULT_MEASUREMENT_UNIT}
+        {'title':'Nanodac IP', 'name': 'Nanodac_IP', 'type': 'str','value':'192.168.0.1'},
+        {'title':'Channel', 'name': 'Channel','type': 'list','limits':list( Nanodac.CHANNELS.keys())}
         ]
 
     def ini_attributes(self):
@@ -55,7 +53,6 @@ class DAQ_0DViewer_Eurotherm_Nanodac(DAQ_Viewer_base):
 
     def commit_settings(self, param: Parameter):
         """Apply the consequences of a change of value in the detector settings
-
         Parameters
         ----------
         param: Parameter
@@ -69,50 +66,60 @@ class DAQ_0DViewer_Eurotherm_Nanodac(DAQ_Viewer_base):
 
     def ini_detector(self, controller=None):
         """Detector communication initialization
-
         Parameters
         ----------
         controller: (object)
             custom object of a PyMoDAQ plugin (Slave case). None if only one actuator/detector by controller
             (Master case)
-
         Returns
         -------
         info: str
         initialized: bool
             False if initialization failed otherwise True
         """
-
-        raise NotImplementedError  # TODO when writing your own plugin remove this line and modify the one below
+        ip = self.settings['Nanodac_IP']
+        # raise NotImplementedError  # TODO when writing your own plugin remove this line and modify the one below
         if self.is_master:
-            self.controller = PythonWrapperOfYourInstrument()  #instantiate you driver with whatever arguments are needed
-            self.controller.open_communication() # call eventual methods
-            initialized = self.controller.a_method_or_atttribute_to_check_if_init()  # TODO
+            self.controller = Nanodac(self.settings['Nanodac_IP'])  #instantiate you driver with whatever arguments are needed
+            # self.controller.connect(ip) # call eventual methods
+            initialized, info = self.controller.connect()  # TODO
         else:
             self.controller = controller
             initialized = True
-
+        if 'Main.Units' in self.controller.CHANNELS[self.settings['Channel']].keys():
+            unit=self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Units'],typeVar = 'str', count=6)
+        else:
+            #pas d'unité' pour la sortie de W de la boucle donc fixe
+            unit="%"
+        if 'Main.Descriptor' in self.controller.CHANNELS[self.settings['Channel']].keys():
+            label=self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Descriptor'],typeVar = 'str', count=21)
+        else:
+            #pas de nom pour la sortie de W de la boucle donc fixe
+            label=f"Sortie W {self.settings['Channel']}"
         # TODO for your custom plugin (optional) initialize viewers panel with the future type of data
-        self.dte_signal_temp.emit(DataToExport(name='myplugin',
-                                               data=[DataFromPlugins(name='Mock1',
-                                                                    data=[np.array([0]), np.array([0])],
-                                                                    dim='Data0D',
-                                                                    labels=['Mock1', 'label2'])]))
-
-        info = "Whatever info you want to log"
+        # self.dte_signal_temp.emit(DataToExport(name='eurotherm_nanodac',
+        #                                        data=[DataFromPlugins(name='nanodac',
+        #                                                             data=[np.array([0]), np.array([0])],
+        #                                                             dim='Data0D',
+        #                                                             # labels=['ENLMock1', 'ENLlabel2'])]))
+        #                                                             labels=['nanodac'])]))
+        self.dte_signal.emit(DataToExport(name='eurotherm_nanodac',
+                                          data=[DataFromPlugins(name=label, data=[np.array([0])],
+                                                                dim='Data0D', labels=[unit])]))
+        info = "detector ok"
         return info, initialized
 
     def close(self):
         """Terminate the communication protocol"""
         ## TODO for your custom plugin
-        raise NotImplementedError  # when writing your own plugin remove this line
+        # raise NotImplementedError  # when writing your own plugin remove this line
         if self.is_master:
+            self.controller.disconnect()
             #  self.controller.your_method_to_terminate_the_communication()  # when writing your own plugin replace this line
             ...
 
     def grab_data(self, Naverage=1, **kwargs):
         """Start a grab from the detector
-
         Parameters
         ----------
         Naverage: int
@@ -121,19 +128,26 @@ class DAQ_0DViewer_Eurotherm_Nanodac(DAQ_Viewer_base):
         kwargs: dict
             others optionals arguments
         """
-        ## TODO for your custom plugin: you should choose EITHER the synchrone or the asynchrone version following
-
-        # synchrone version (blocking function)
-        raise NotImplementedError  # when writing your own plugin remove this line
-        data_tot = self.controller.your_method_to_start_a_grab_snap()
-        self.dte_signal.emit(DataToExport(name='myplugin',
-                                          data=[DataFromPlugins(name='Mock1', data=data_tot,
-                                                                dim='Data0D', labels=['dat0', 'data1'])]))
+        abs_value = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.PV'])
+        if 'Main.Units' in self.controller.CHANNELS[self.settings['Channel']].keys():
+            res_value=self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Resolution'])
+            value=abs_value/(10**res_value)
+            label = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Descriptor'],
+                                                      typeVar='str', count=21)
+            unit = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Units'],
+                                                 typeVar='str', count=6)
+        else:
+            value = abs_value/1000
+            unit = "%"
+            label = f"Sortie W {self.settings['Channel']}"
+        self.dte_signal.emit(DataToExport(name='eurotherm_nanodac',
+                                          data=[DataFromPlugins(name=label, data=value,
+                                                                dim='Data0D', labels=[unit])]))
         #########################################################
 
         # asynchrone version (non-blocking function with callback)
-        raise NotImplementedError  # when writing your own plugin remove this line
-        self.controller.your_method_to_start_a_grab_snap(self.callback)  # when writing your own plugin replace this line
+        # raise NotImplementedError  # when writing your own plugin remove this line
+        # self.controller.your_method_to_start_a_grab_snap(self.callback)  # when writing your own plugin replace this line
         #########################################################
 
 
@@ -147,9 +161,9 @@ class DAQ_0DViewer_Eurotherm_Nanodac(DAQ_Viewer_base):
     def stop(self):
         """Stop the current grab hardware wise if necessary"""
         ## TODO for your custom plugin
-        raise NotImplementedError  # when writing your own plugin remove this line
-        self.controller.your_method_to_stop_acquisition()  # when writing your own plugin replace this line
-        self.emit_status(ThreadCommand('Update_Status', ['Some info you want to log']))
+        self.controller.disconnect() # when writing your own plugin remove this line
+        # self.controller.your_method_to_stop_acquisition()  # when writing your own plugin replace this line
+        self.emit_status(ThreadCommand('Update_Status', ['stop nanodac acquisition']))
         ##############################
         return ''
 

@@ -21,38 +21,27 @@ class Nanodac:
     # possibleUnits:      list[str] = ['°C', '°F', 'K','bar'] # Possible units
     AVAILABLE_MEASUREMENT_UNITS:      list[str] = ['°C', '°F', 'K','bar'] # Possible units
     DEFAULT_MEASUREMENT_UNIT= AVAILABLE_MEASUREMENT_UNITS[0]
-    # instrumentSerial:   serial.Serial = None
-    # slaveAddress:       int = 1     # 0 value is only for slave broadcasting
 
-    # defaults = {
-    #     # 'encoding':             'ascii',
-    #     'baudrate':             19200,
-    #     # 'timeout':              2000,
-    #     'parity':               serial.PARITY_NONE,
-    #     'bytesize':             8,
-    #     'stopbits':             serial.STOPBITS_ONE,
-    #     'timeout':              0.05,
-    #     'write_timeout':        2.0
-    # }
+    CHANNELS:dict[str,dict]={'Channel1':{'Main.Descriptor':18688,'Main.PV':256,'Main.Units':18709,'Main.Resolution':6145},
+                             'Channel2':{'Main.Descriptor':18715,'Main.PV':260,'Main.Units':18736,'Main.Resolution':6273},
+                             'Channel3':{'Main.Descriptor':18742,'Main.PV':264,'Main.Units':18763,'Main.Resolution':6401},
+                             'Channel4':{'Main.Descriptor':18769,'Main.PV':268,'Main.Units':18790,'Main.Resolution':6529},
+                             'loop1.Main.ActiveOut':{'Main.PV':516},
+                             'loop2.Main.ActiveOut':{'Main.PV':654}}
 
-    def __init__(self):
+    LOOPS:dict[str,dict]={'Loop1':{'PID.SchedulerType':5685,'Main.PV':512,'Main.TargetSP':514,'Main.AutoMan':513,'Main.ActiveOut':516},
+                          'Loop2':{'PID.SchedulerType':5941,'Main.PV':640,'Main.TargetSP':642,'Main.AutoMan':641,'Main.ActiveOut':654}}
+    # Loop.2.Main.ActiveOut 644
+    # Loop.1.Main.ActiveOut 516
+
+    def __init__(self,ip):
         """
         Args:
             * portname (str): port name
             * slaveaddress (int): slave address in the range 1 to 247
         """
-        # minimalmodbus.Instrument.__init__(self, portname, slaveaddress)
-        # self.instrumentSerial = serial.Serial(
-        #     port=None, # Port is set to none to not open port immediately
-        #     baudrate=self.defaults['baudrate'],
-        #     parity=self.defaults['parity'],
-        #     bytesize=self.defaults['bytesize'],
-        #     stopbits=self.defaults['stopbits'],
-        #     timeout=self.defaults['timeout'],
-        #     write_timeout=self.defaults['write_timeout'],
-        #     )
-        self.ip: str = ip
-        # self.instrumentSerial.port = portname # Port is set afterward none to not open port immediately
+        self.ip = ip
+        self.client = ModbusTcpClient(self.ip)
 
     def connect(self):
         """Instrument serial port opening
@@ -63,110 +52,110 @@ class Nanodac:
             False if initialization failed otherwise True
         """
         try:
-            ModbusTcpClient(ip = self.ip)
+            self.client.connect()
             # super().__init__(ip = self.ip)
-            # self.instrumentSerial.open() # Already called in parent init
-
+            info = f"Nanodac connection opened at ip : {self.ip}"
             sleep(0.2) # Make sure connection is established before doing anything else
-
         except: # serial.SerialException:
             info = f"Failed to open connection at ip : {self.ip}"
-            # raise
-            pass
-        else:
-            info =  f"Nanodac connection opened at ip : {self.ip}"
+        opened = self.client.is_socket_open()
+        return opened,info
 
-        opened = self.is_socket_open()
-
-        return info, opened
-
-    def get_current_value(self,address):
+    def get_current_value(self,address,typeVar='int',count=1):
         """once the instrument is initialized, return its current measured value"""
-        value = self.read_holding_registers(address=address, count=1)
-
-        return float(value)
+        try:
+            read = self.client.read_holding_registers(address=address, count=count)
+        except:
+            self.connect()
+            self.get_current_value(self, address, typeVar=typeVar, count=count)
+        if typeVar =='int':
+            returnValue=read.registers[0]
+        else:
+            returnValue = ''.join(map(chr, list(filter(lambda num: num != 0, read.registers))))
+        return returnValue
 
     def set_current_value(self,address,value):
         """once the instrument is initialized, set current  value for consign"""
-        self.write_register(address=address, value=value)
-
-        return float(value)
+        try:
+            write=self.client.write_register(address=address, value=value)
+        except Exception as e:
+            self.connect()
+            self.set_current_value(self, address, value)
+        return write
 
 
     def disconnect(self):
-        self.close()
-        return not self.is_socket_open()
+        self.client.close()
+        return not self.client.is_socket_open()
 
+#TODO on supprime ?
 
-
-    def get_instrument_version(self):
-        """Return the instrument version information of the device."""
-        return self.read_register(107)
-
-    # def get_instrument_homepage(self):
-    #     """Return the instrument homepage of the device."""
-    #     return self.read_register(106)
-
-    def get_instrument_type(self):
-        """Return a string to precise whether it is a 3508 or 3504 process controller."""
-        res = self.read_register(122) # Returns 0 for 3508 device and 1 for 3504 device
-        if res == 0:
-            return "Eurotherm 3508"
-        elif res == 1:
-            return "Eurotherm 3504"
-        else:
-            return "Unknown"
-
-    def get_instrument_display_units(self):
-        """"""
-        value = self.read_register(516) # Returns 0 if Deg C; 1 if Deg F; 2 if K
-
-        if value == 0:
-            self.unit = "°C"
-        elif value == 1:
-            self.unit =  "°F"
-        elif value == 2:
-            self.unit =  "K"
-        else:
-            self.unit =  "unknown unit"
-
-        return self.unit
-    
-    def set_instrument_display_units(self, unitsStr):
-        """Accepted values = {'°C'; '°F'; 'K'}"""
-
-        # Write 0 if Deg C; 1 if Deg F; 2 if K
-        if unitsStr == "°C":
-            value = 0
-        elif unitsStr == "°F":
-            value = 1
-        elif unitsStr == "K":
-            value = 2
-        else:
-            raise ValueError
-        
-        self.write_register(516, value, 1)
-        self.unit = unitsStr
+    # def get_instrument_version(self):
+    #     """Return the instrument version information of the device."""
+    #     return self.client.read_register(107)
+    #
+    # # def get_instrument_homepage(self):
+    # #     """Return the instrument homepage of the device."""
+    # #     return self.read_register(106)
+    #
+    # def get_instrument_type(self):
+    #     """Return a string to precise whether it is a 3508 or 3504 process controller."""
+    #     res = self .read_register(122) # Returns 0 for 3508 device and 1 for 3504 device
+    #     if res == 0:
+    #         return "Nanodac 3508"
+    #     elif res == 1:
+    #         return "Nanodac 3504"
+    #     else:
+    #         return "Unknown"
+    #
+    # def get_instrument_display_units(self):
+    #     """"""
+    #     value = self.read_register(516) # Returns 0 if Deg C; 1 if Deg F; 2 if K
+    #
+    #     if value == 0:
+    #         self.unit = "°C"
+    #     elif value == 1:
+    #         self.unit =  "°F"
+    #     elif value == 2:
+    #         self.unit =  "K"
+    #     else:
+    #         self.unit =  "unknown unit"
+    #
+    #     return self.unit
+    #
+    # def set_instrument_display_units(self, unitsStr):
+    #     """Accepted values = {'°C'; '°F'; 'K'}"""
+    #
+    #     # Write 0 if Deg C; 1 if Deg F; 2 if K
+    #     if unitsStr == "°C":
+    #         value = 0
+    #     elif unitsStr == "°F":
+    #         value = 1
+    #     elif unitsStr == "K":
+    #         value = 2
+    #     else:
+    #         raise ValueError
+    #
+    #     self.write_register(516, value, 1)
+    #     self.unit = unitsStr
 
 ########################
 ## Testing the module ##
 ########################
 
 if __name__ == '__main__':
-    print( 'TESTING EUROTHERM 3500 MODBUS MODULE ON COM4 PORT WITH SLAVE ADDRESS 1')
+    print( 'TESTING Nanodac MODBUS MODULE PORT WITH SLAVE ADDRESS 1')
 
-    # serialPort = 'COM4'
-    # slaveAddress = 1
-    ip='140.77.101.201'
+    ip='192.168.0.1'
     a = Nanodac(ip)
     a.debug = DEBUG
     info, opened = a.open_communication()
 
     if opened == False:
-        print(f"Failed to open serial port", serialPort, " --> Opening info = ", info)
+        print(f"Nanodac Failed to open serial port",  " --> Opening info = ", info)
     else:
         if a.debug == True:
-            print(f"Successfully opened serial port ", serialPort, "  --> Opening info = ", info)
+            print(f"Nanodac Successfully opened serial port ","  --> Opening info = ", info)
         
         # if a.instrumentSerial.is_open:
         print( 'PV:                     {0}'.format(  a.get_pv_loop1()             ))
