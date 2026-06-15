@@ -83,3 +83,4 @@ Installation instructions
 .. * What manufacturer’s drivers should be installed to make this plugin run?
 
 * Currently under test on Windows 10 OS, with python=3.11.13 & pymodaq=5.0.18
+* for Nanodac  under test on Windows 10 OS, with python=3.11.13 & pymodaq=5.1.11
