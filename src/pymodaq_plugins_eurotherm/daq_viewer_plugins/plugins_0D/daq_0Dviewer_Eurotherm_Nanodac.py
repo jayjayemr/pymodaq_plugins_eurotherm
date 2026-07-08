@@ -1,5 +1,5 @@
 import numpy as np
-
+from qtpy import QtWidgets
 from pymodaq_utils.utils import ThreadCommand
 from pymodaq_data.data import DataToExport
 from pymodaq_gui.parameter import Parameter
@@ -39,15 +39,16 @@ class DAQ_0DViewer_Eurotherm_Nanodac(DAQ_Viewer_base):
 
     """
     params = comon_parameters+[
-        {'title':'Nanodac IP', 'name': 'Nanodac_IP', 'type': 'str','value':'192.168.0.1'},
-        {'title':'Channel', 'name': 'Channel','type': 'list','limits':list( Nanodac.CHANNELS.keys())}
+        {'title':'Nanodac IP', 'name': 'Nanodac_IP', 'type': 'str'},
+        {'title':'Channel', 'name': 'Channel','type': 'list','limits':list( Nanodac.CHANNELS.keys())},
+        {'title': 'Show in LCD', 'name': 'lcd', 'type': 'bool', 'value': False},
         ]
 
     def ini_attributes(self):
         #  TODO declare the type of the wrapper (and assign it to self.controller) you're going to use for easy
         #  autocompletion
         self.controller: Nanodac = None
-
+        self.lcd_init = False
         #TODO declare here attributes you want/need to init with a default value
         pass
 
@@ -86,16 +87,27 @@ class DAQ_0DViewer_Eurotherm_Nanodac(DAQ_Viewer_base):
         else:
             self.controller = controller
             initialized = True
+
         if 'Main.Units' in self.controller.CHANNELS[self.settings['Channel']].keys():
             unit=self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Units'],typeVar = 'str', count=6)
+            label = self.controller.get_current_value(
+                address=self.controller.CHANNELS[self.settings['Channel']]['Main.Descriptor'], typeVar='str', count=21)
+            self.dte_signal.emit(DataToExport(name='eurotherm_nanodac',
+                                              data=[DataFromPlugins(name=label, data=[np.array([0])],
+                                                                    dim='Data0D', labels=[unit])]))
         else:
             #pas d'unité' pour la sortie de W de la boucle donc fixe
             unit="%"
-        if 'Main.Descriptor' in self.controller.CHANNELS[self.settings['Channel']].keys():
-            label=self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Descriptor'],typeVar = 'str', count=21)
-        else:
+            label = f"Sortie W {self.settings['Channel']}"
+        if self.settings['lcd']:
             #pas de nom pour la sortie de W de la boucle donc fixe
-            label=f"Sortie W {self.settings['Channel']}"
+            # print(f"{label} {unit}  {[np.array([0])]}")
+            if not self.lcd_init:
+                #juste un wiever pas de graph
+                self.emit_status(ThreadCommand('init_lcd', dict(labels=[label], Nvals=1, digits=6)))
+                QtWidgets.QApplication.processEvents()
+                self.lcd_init = True
+            self.emit_status(ThreadCommand('lcd', [np.array([0])]))
         # TODO for your custom plugin (optional) initialize viewers panel with the future type of data
         # self.dte_signal_temp.emit(DataToExport(name='eurotherm_nanodac',
         #                                        data=[DataFromPlugins(name='nanodac',
@@ -103,9 +115,7 @@ class DAQ_0DViewer_Eurotherm_Nanodac(DAQ_Viewer_base):
         #                                                             dim='Data0D',
         #                                                             # labels=['ENLMock1', 'ENLlabel2'])]))
         #                                                             labels=['nanodac'])]))
-        self.dte_signal.emit(DataToExport(name='eurotherm_nanodac',
-                                          data=[DataFromPlugins(name=label, data=[np.array([0])],
-                                                                dim='Data0D', labels=[unit])]))
+
         info = "detector ok"
         return info, initialized
 
@@ -128,21 +138,31 @@ class DAQ_0DViewer_Eurotherm_Nanodac(DAQ_Viewer_base):
         kwargs: dict
             others optionals arguments
         """
-        abs_value = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.PV'])
+        abs_value = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.PV'],typeVar='int')
         if 'Main.Units' in self.controller.CHANNELS[self.settings['Channel']].keys():
             res_value=self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Resolution'])
-            value=abs_value/(10**res_value)
-            label = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Descriptor'],
-                                                      typeVar='str', count=21)
-            unit = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Units'],
-                                                 typeVar='str', count=6)
+            label = self.controller.get_current_value(
+                address=self.controller.CHANNELS[self.settings['Channel']]['Main.Descriptor'],
+                typeVar='str', count=21)
+            unit = self.controller.get_current_value(
+                address=self.controller.CHANNELS[self.settings['Channel']]['Main.Units'],
+                typeVar='str', count=6)
         else:
-            value = abs_value/1000
+            res_value=1
             unit = "%"
-            label = f"Sortie W {self.settings['Channel']}"
+            label = f"{self.settings['Channel']}"
+        value=abs_value/(10**res_value)
+
         self.dte_signal.emit(DataToExport(name='eurotherm_nanodac',
                                           data=[DataFromPlugins(name=label, data=value,
                                                                 dim='Data0D', labels=[unit])]))
+        if self.settings['lcd']:
+            if not self.lcd_init:
+                self.emit_status(ThreadCommand('init_lcd', dict(labels=[label], Nvals=1, digits=6)))
+                QtWidgets.QApplication.processEvents()
+                self.lcd_init = True
+            self.emit_status(ThreadCommand('lcd', [np.array([value])]))
+
         #########################################################
 
         # asynchrone version (non-blocking function with callback)

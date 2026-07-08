@@ -33,13 +33,13 @@ class DAQ_Move_Eurotherm_Nanodac(DAQ_Move_base):
     _axis_names: Union[List[str], Dict[str, int]] = ['Température', 'Consigne', 'Puissance']  # TODO for your plugin: complete the list
     # _controller_units: Union[str, List[str]] = ['°C', '°C', '%'] # TODO multiaxis support
     # _axis_names: Union[List[str], Dict[str, int]] = ['Température']
-    _controller_units: Union[str, List[str]] = '°C'
+    _controller_units: Union[str, List[str]] = ['°C','%','bar']
     _epsilon: Union[float, List[float]] = 0.5  # TODO replace this by a value that is correct depending on your controller
     # TODO it could be a single float of a list of float (as much as the number of axes)
-    data_actuator_type = DataActuatorType.DataActuator  # wether you use the new data style for actuator otherwise set this
+    # data_actuator_type = DataActuatorType.DataActuator  # wether you use the new data style for actuator otherwise set this
     # as  DataActuatorType.float  (or entirely remove the line)
 
-    params = [  {'title': 'Nanodac IP', 'name': 'Nanodac_IP', 'type': 'str', 'value': '140.77.101.201'},
+    params = [  {'title': 'Nanodac IP', 'name': 'Nanodac_IP', 'type': 'str'},
                 {'title': 'Loop', 'name': 'Loop', 'type': 'list', 'limits': list(Nanodac.LOOPS.keys())},
                 {'title': 'Channel', 'name': 'Channel', 'type': 'list', 'limits': list(Nanodac.CHANNELS.keys())},
                 ] + comon_parameters_fun(is_multiaxes, axis_names=_axis_names, epsilon=_epsilon)
@@ -59,10 +59,15 @@ class DAQ_Move_Eurotherm_Nanodac(DAQ_Move_base):
         -------
         int or float: The position obtained after scaling conversion.
         """
+        value=self.controller.get_current_value(self.controller.LOOPS[self.settings['Loop']]['Main.PV'], typeVar='int')
+        res_value = self.controller.get_current_value(
+            address=self.controller.CHANNELS[self.settings['Channel']]['Main.Resolution'], typeVar='int')
+        value = value / (10 ** res_value)
         #TODO  units ??
-
+        # print(self.controller.CHANNELS[self.settings['Channel']]['Main.Units'])
+        # print(self.controller.get_current_value(self.controller.CHANNELS[self.settings['Channel']]['Main.Units'],typeVar='str', count=6))
         # print(f"  {self.settings['Loop']} {self.settings['Channel']} {self.controller.get_current_value(self.controller.LOOPS[self.settings['Loop']]['Main.PV'])} => {self.controller.get_current_value(self.controller.CHANNELS[self.settings['Channel']]['Main.Units'],typeVar='str', count=6)}")
-        pos = DataActuator(data=self.controller.get_current_value(self.controller.LOOPS[self.settings['Loop']]['Main.PV']),
+        pos = DataActuator(data=value,
                            units=self.controller.get_current_value(self.controller.CHANNELS[self.settings['Channel']]['Main.Units'],typeVar='str', count=6))
         pos = self.get_position_with_scaling(pos)
         return pos
@@ -119,12 +124,10 @@ class DAQ_Move_Eurotherm_Nanodac(DAQ_Move_base):
 
     def ini_stage(self, controller=None):
         """Actuator communication initialization
-
         Parameters
         ----------
         controller: (object)
             custom object of a PyMoDAQ plugin (Slave case). None if only one actuator by controller (Master case)
-
         Returns
         -------
         info: str
@@ -140,12 +143,14 @@ class DAQ_Move_Eurotherm_Nanodac(DAQ_Move_base):
             initialized = True
             info = "Current instrument is a slave, using master controller for operation."
 
-        # if initialized:
-        #     tempUnits = self.controller.get_instrument_display_units()
+        if initialized:
+            # tempUnits = self.controller.get_instrument_display_units()
         #     self.settings.child('controller_units').setValue(tempUnits)
         #     # self._controller_units = [tempUnits, tempUnits, '%'] # TODO multiaxis support
-        #     self._controller_units = [tempUnits]
-        #     self.axis_unit = [tempUnits]
+            self._controller_units = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Units'],
+                                                 typeVar='str', count=6)
+            self.axis_unit = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Units'],
+                                                 typeVar='str', count=6)
         #
         #     self.settings.child('eurotherm_type').setValue(self.controller.get_instrument_type())
         #
@@ -155,23 +160,23 @@ class DAQ_Move_Eurotherm_Nanodac(DAQ_Move_base):
 
     def move_abs(self, value: DataActuator):
         """ Set the process controller's (LOOP 1 !) current setpoint to the given value
-
         Parameters
         ----------
         value: (int or float) value of the absolute target positioning
         """
 
         value = self.check_bound(value)  #if user checked bounds, the defined bounds are applied here
-
         self.target_value = value
-        res_value = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Resolution'])
+        res_value = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Resolution'],typeVar='int')
         value = value * (10 ** res_value)
         value = self.set_position_with_scaling(value)  # apply scaling if the user specified one
         # activation manuel => auto
-        self.controller.set_current_value(self.controller.LOOPS[self.settings['Loop']]['Main.AutoMan'],0)
+        # self.emit_status(ThreadCommand('Update_Status', [f'move_abs===========>>>>>{np.array([value])}']))
         # set consigne
-        self.controller.set_current_value(self.controller.LOOPS[self.settings['Loop']]['Main.TargetSP'],int(value.value(self.axis_unit)))
-        self.emit_status(ThreadCommand('Update_Status', [f'Received new setpoint = {value.value(self.axis_unit)}']))
+        # print(f"{value }  {self.controller.LOOPS[self.settings['Loop']]['Main.TargetSP']} ")
+        self.controller.set_current_value(self.controller.LOOPS[self.settings['Loop']]['Main.TargetSP'],int(value))
+        self.controller.set_current_value(self.controller.LOOPS[self.settings['Loop']]['Main.AutoMan'], 0)
+        self.emit_status(ThreadCommand('Update_Status', [f'Received new setpoint = {self.target_value } {self.axis_unit}']))
 
     def move_rel(self, value: DataActuator):
         """ Change the process controller's (LOOP 1 !) current setpoint to the given differential value
@@ -181,13 +186,14 @@ class DAQ_Move_Eurotherm_Nanodac(DAQ_Move_base):
         value: (int or float) value of the relative target setpoint
         """
         value = self.check_bound(self.current_value + value) - self.current_value
-        res_value = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Resolution'])
+        res_value = self.controller.get_current_value(address=self.controller.CHANNELS[self.settings['Channel']]['Main.Resolution'],typeVar='int')
         value = value / (10 ** res_value)
         self.target_value = value + self.current_value
         value = self.set_position_relative_with_scaling(value)
+        # self.emit_status(ThreadCommand('Update_Status', [f'move_rel===========>>>>>{np.array([value])}']))
+        self.controller.set_current_value(self.controller.LOOPS[self.settings['Loop']]['Main.TargetSP'],value)
         self.controller.set_current_value(self.controller.LOOPS[self.settings['Loop']]['Main.AutoMan'], 0)
-        self.controller.set_current_value(self.controller.LOOPS[self.settings['Loop']]['Main.TargetSP'],int(value.value(self.axis_unit)))
-        self.emit_status(ThreadCommand('Update_Status', [f'Received new setpoint = {value.value(self.axis_unit)}']))
+        self.emit_status(ThreadCommand('Update_Status', [f'Received new setpoint = {self.target_value } {self.axis_unit}']))
 
     def move_home(self):
         """Set the process controller's (LOOP 1 !) current setpoint to zero value of the current unit"""

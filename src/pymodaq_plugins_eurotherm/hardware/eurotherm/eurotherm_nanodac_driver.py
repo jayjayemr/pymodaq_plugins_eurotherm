@@ -7,6 +7,8 @@ originally created by Jonas Berg <pyhys@users.sourceforge.net> in 2012) and adap
 """
 from tkinter import E
 from pymodbus.client import ModbusTcpClient
+from pymodbus.exceptions import ConnectionException
+
 # from typing import Union#, Tuple
 from time import sleep
 
@@ -17,7 +19,7 @@ class Nanodac:
     """Instrument class for Nanodac process controller.
 
     """
-    unit:               str = '°C'  # Instrument.Display.Units - Unité d'affichage de l'instrument
+    unit:               list[str] = ['°C','%','bar'] # Instrument.Display.Units - Unité d'affichage de l'instrument
     # possibleUnits:      list[str] = ['°C', '°F', 'K','bar'] # Possible units
     AVAILABLE_MEASUREMENT_UNITS:      list[str] = ['°C', '°F', 'K','bar'] # Possible units
     DEFAULT_MEASUREMENT_UNIT= AVAILABLE_MEASUREMENT_UNITS[0]
@@ -56,18 +58,24 @@ class Nanodac:
             # super().__init__(ip = self.ip)
             info = f"Nanodac connection opened at ip : {self.ip}"
             sleep(0.2) # Make sure connection is established before doing anything else
-        except: # serial.SerialException:
-            info = f"Failed to open connection at ip : {self.ip}"
+        except ConnectionException as e:
+            info = f"Failed to open connection at ip : {self.ip} \n {e}"
         opened = self.client.is_socket_open()
         return opened,info
 
     def get_current_value(self,address,typeVar='int',count=1):
         """once the instrument is initialized, return its current measured value"""
+
+        # print(f"+++++++++++++++{address}================={typeVar}================{count}+++++++++++++")
         try:
             read = self.client.read_holding_registers(address=address, count=count)
-        except:
+        except Exception as e:
             self.connect()
-            self.get_current_value(self, address, typeVar=typeVar, count=count)
+            print(f"-----------{e}--------------")
+            # print(f"+++++++++++++++{typeVar}+++++++++++++")
+            # self.get_current_value(self, address, typeVar=typeVar, count=count)
+            sleep(0.5)
+            read = self.client.read_holding_registers(address=address, count=count)
         if typeVar =='int':
             returnValue=read.registers[0]
         else:
@@ -76,11 +84,12 @@ class Nanodac:
 
     def set_current_value(self,address,value):
         """once the instrument is initialized, set current  value for consign"""
+        # print(address)
         try:
             write=self.client.write_register(address=address, value=value)
         except Exception as e:
             self.connect()
-            self.set_current_value(self, address, value)
+            write=self.client.write_register(address=address, value=value)
         return write
 
 
@@ -88,6 +97,14 @@ class Nanodac:
         self.client.close()
         return not self.client.is_socket_open()
 
+    def get_instrument_display_units(self):
+        """"""
+        # print(f'{self}')
+        value=self.get_current_value(address=self.CHANNELS['Channel1']['Main.Units'],typeVar='str', count=6)
+        # print(f'>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>{value}')
+        self.unit=value
+
+        return self.unit
 #TODO on supprime ?
 
     # def get_instrument_version(self):
