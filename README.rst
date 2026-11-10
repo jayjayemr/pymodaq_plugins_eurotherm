@@ -28,6 +28,7 @@ Authors
 * Sebastien. J. Weber
 * Adélaïs Bruel (adelais.bruel@gmail.com)
 * Pierre-Anne Bausson (bausson.pierreanne@gmail.com)
+* Jérôme Pouilloux  (jerome.pouilloux@gmail.com)
 
 
 Instruments

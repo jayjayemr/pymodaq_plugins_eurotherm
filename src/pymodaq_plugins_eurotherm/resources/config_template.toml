@@ -1,4 +1,4 @@
-title = 'this is the configuration file of the plugin XXX'
+title = 'this is the configuration file of the plugin eurotherm'
 
 
 port = 'COM1'

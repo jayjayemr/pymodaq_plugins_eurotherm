@@ -10,7 +10,7 @@ package-url = 'https://github.com/PyMoDAQ/pymodaq_plugins_eurotherm'
 
 [project]
 name = "pymodaq_plugins_eurotherm"
-description = 'some word about your plugin'
+description = 'plugin to manage eurotherm hardware'
 dependencies = [
     "pymodaq>=5.3.2",
     "pymodaq_utils>=5.3.1",
@@ -18,12 +18,14 @@ dependencies = [
     "pymodaq_data>=5.3.0",
     "pymeasure @ git+https://github.com/PyMoDAQ/pymeasure.git@feature/eurotherm-drivers",
     "pymodaq_plugins_utils[serial]",
+    "pymodbus>=3.13.0"
 ]
 
 authors = [
     {name = "Weber J. Sebastien", email = "sebastien.weber@cnrs.fr"},
     {name = "Adélaïs Bruel", email = "adelais.bruel@gmail.com"},
     {name = "Pierre-Anne Bausson", email = "bausson.pierreanne@gmail.com"},
+    {name = "POUILLOUX Jérôme", email = "jerome.pouilloux@gmail.com"}
 ]
 maintainers = [
     {name = "Weber J. Sebastien", email = "sebastien.weber@cnrs.fr"},
